@@ -1,0 +1,10 @@
+﻿@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Eigen3 3.3 CONFIG)
+
+if(NOT TARGET ipm_admm_cg::ipm_admm_cg)
+    include("${CMAKE_CURRENT_LIST_DIR}/ipm_admm_cgTargets.cmake")
+endif()
+
+check_required_components(ipm_admm_cg)
