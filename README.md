@@ -37,8 +37,11 @@ $$\begin{align}
     \left(P + \rho^k I_n + \frac{1}{\delta^k} E^T E + G^T  \mathcal{W}^{-k}  G \right)  \Delta x = \overline{r}^k
 \end{align}$$
 
-By defining 
-$$\begin{align} \Phi= P + \rho^k I_n + \frac{1}{\delta^k} E^T E + G^T \mathcal{W}^{-k} G. \end{align}$$, ADMM operator splitting can be applied to the system $$\Phi \delta x = \overline{r}^k$$.The resulting updates are:
+By defining:  
+
+$$\begin{align} \Phi = P + \rho^k I_n + \frac{1}{\delta^k} E^T E + G^T \mathcal{W}^{-k} G. \end{align}$$
+
+ADMM operator splitting can be applied to the system $$\Phi \delta x = \overline{r}^k$$.The resulting updates are:
 
 $$\begin{align}
 \begin{cases}
@@ -48,7 +51,12 @@ $$\begin{align}
 \end{cases}
 \end{align}$$
 
-The first ADMM update is then solved using a Block PCG. This is equivalent to $$\begin{align} \Psi \Delta x^{k+1}=\overline{r}^k +\beta\gamma^k. \end{align}$$ where $\Psi= \Phi+\beta I$.$$
+The first ADMM update is then solved using a Block PCG. This is equivalent to 
+
+$$\begin{align} \Psi \Delta x^{k+1}=\overline{r}^k +\beta\gamma^k.\end{align}$$ 
+
+where
+$\Psi= \Phi+\beta I$.
 
 The forward and backward substitutions are used to solve for the subsequent missing variables. 
 
@@ -56,15 +64,17 @@ See APIP: ADMM-based Proximal Interior Point Solver for Linear Model Predictive 
 
 ## Benchmark & Scaling 
 
-The solver was tested on mass-spring-damper example benchmarks. The problem was scaled across horizons $N = 1000 to 10000$, as shown below:
+The solver was tested on mass-spring-damper example benchmarks. The problem was scaled across horizons $N = 1000$ to $10000$, as shown below:
 
-Horizon     Variables       Solve Time (ms)     Inner CG iterations
-1000        15,000          68.4                5
-2000        30,000          137.8               5
-3000        45,000          205.3               5
-4000        60,000          274.9               5
-5000        75,000          340.8               5
-...
+| Horizon | Variables | Solve Time (ms) | Inner CG iterations |
+| :--- | :--- | :--- | :--- |
+| 1000 | 15,000 | 68.4 | 5 |
+| 2000 | 30,000 | 137.8 | 5 |
+| 3000 | 45,000 | 205.3 | 5 |
+| 4000 | 60,000 | 274.9 | 5 |
+| 5000 | 75,000 | 340.8 | 5 |
+| ... | ... | ... | ... |
+
 
 This has minimal PCG iterations with consistent $O(N)$ runtime. 
 
@@ -108,7 +118,45 @@ This project is licensed under the MIT license. See LICENSE for details.
 
 ## References
 
-1. Schaller, M., et al. (2023) PIQP: A Proximal Interior-point Quadratic Programming Solver.
-2. Stellato, B., et al. (2020) OSQP: An operator splitting solver for quadratic problems. Mathematical Programming Computation, 12(4), 637-672.
-3. Boyd, S., et al. (2011) Distributed optimization and statistical learning via the alternating direction method of multipliers. Foundations and Trends in Machine Learning, 3(1), 1-122. 
-4. Wang, Y., & Boyd, S. (2010) Fast model predictive control using online optimization. IEEE Transactions on Control Systems Technology, 18(2), 267-278.
+1. Y. Wang and S. Boyd, “Fast model predictive control using online
+optimization,” in IEEE Transactions on control systems technology.,
+vol. 18, no. 2, pp. 267–278, 2010.
+2. A. Malyshev, R. Quirynen, A. Knyazev and S. D. Cairano, “A
+regularized Newton solver for linear model predictive control,” in
+European Control Conference., Limassol, Cyprus, 2018, pp. 1393-
+1398.
+3. R. Schwan, Y. Jiang, D. Kuhn and C. N. Jones, “PIQP: A Proximal
+Interior-Point Quadratic Programming Solver,” in IEEE Conference on
+Decision and Control., Singapore, Singapore, 2023, pp. 1088–1093.
+4. R. Schwan, D. Kuhn and C. N. Jones, “Exploiting multistage optimiza-
+tion structure in proximal solvers,” in IEEE Conference on Decision
+and Control., Rio de Janeiro, Brazil, 2025, pp. 4677-4683.
+5. G. Frison, and M. Diehl, “HPIPM: a high-performance interior-point
+method solver for quadratic programming,” in IFAC-PapersOnLine.,
+vol. 53, no. 2, pp. 6563–6569, 2020.
+6. B. Stellato, G. Banjac, P. Goulart, A. Bemporad, and S. Boyd, “OSQP:
+An operator splitting solver for quadratic programs,” in Mathematical
+Programming Computation., vol. 12, no. 4, pp. 637-672, 2020.
+7. J. Nocedal and S. J. Wright, “Numerical Optimization,” Springer,
+2006.
+8. S. Boyd, N. Parikh, E. Chu, B. Peleato, and J. Eckstein, “Distributed
+optimization and statistical learning via the alternating direction
+method of multipliers,” in Foundations and Trends® in Machine
+learning., vol. 3, no. 1, pp. 1-122, 2011.
+9. K. Nguyen, S. Schoedel, A. Alavilli, B. Plancher and Z. Manchester,
+”TinyMPC: Model-Predictive Control on Resource-Constrained Mi-
+crocontrollers,” in IEEE International Conference on Robotics and
+Automation (ICRA), Yokohama, Japan, 2024, pp. 1-7.
+10. K. F. Løwenstein, D. Bernardini and P. Patrinos, “QPALM-OCP: A
+Newton-Type Proximal Augmented Lagrangian Solver Tailored for
+Quadratic Programs Arising in Model Predictive Control,” in IEEE
+Control Systems Letters., vol. 8, pp. 1349-1354, 2024.
+11. H. J. Ferreau, C. Kirches, A. Potschka, H. G. Bock and M. Diehl,
+“qpOASES: A parametric active-set algorithm for quadratic program-
+ming,” in Mathematical Programming Computation., vol. 6, no. 4, pp.
+327-363, 2014.
+12. A. Bemporad, “A Numerically Stable Solver for Positive Semidefinite
+Quadratic Programs Based on Nonnegative Least Squares,” in IEEE
+Transactions on Automatic Control., vol. 63, no. 2, pp. 525–531, 2018.
+13. J. Gondzio, “Interior point methods 25 years later,” in European
+Journal of Operational Research., vol. 218, no. 3, pp. 587–601, 2012.
