@@ -16,33 +16,33 @@
 using namespace ipm_admm_cg;
 
 struct MassSolverResult {
-    int M; // Number of agents / units in platoon
-    int nx; // State dimension per agent block
-    int nu; // Control dimension per agent block
-    int N;  // Prediction steps
-    int n;  // Total decision variables = (nx + nu) * M * N
+    int M; 
+    int nx; //state dimension 
+    int nu; //control dimension
+    int N; 
+    int n;  //decision variables 
 
-    // IPM-ADMM-CG
+    //IPM-ADMM-CG
     int custom_ipm_iters;
     int custom_cg_iters;
     double custom_time_ms;
     bool custom_success;
 
-    // OSQP
+    //OSQP
     int osqp_iters;
     double osqp_setup_ms;
     double osqp_solve_ms;
     double osqp_total_ms;
     bool osqp_success;
 
-    // PIQP
+    //PIQP
     int piqp_iters;
     double piqp_total_ms;
     bool piqp_success;
 };
 
-// Scalable Multi-Agent Platoon MPC Problem Formulation
-// Maintains constant stage sub-block size B = nx_agent + nu_agent = 5
+//mass scaled mpc
+//stage sub-block size B = nx_agent + nu_agent = 5
 void build_multi_agent_platoon_problem(int M, int N,
                                         Eigen::SparseMatrix<double>& P,
                                         Eigen::VectorXd& c,
@@ -52,8 +52,8 @@ void build_multi_agent_platoon_problem(int M, int N,
                                         Eigen::VectorXd& h_ineq,
                                         int& nx_out, int& nu_out)
 {
-    int nx_agent = 4; // [position, velocity, acceleration, headway_error]
-    int nu_agent = 1; // [jerk / thrust force]
+    int nx_agent = 4;
+    int nu_agent = 1; 
     nx_out = nx_agent;
     nu_out = nu_agent;
 
@@ -63,7 +63,6 @@ void build_multi_agent_platoon_problem(int M, int N,
     int p = nx_agent * num_blocks;         // Total equality constraints
     int m_ineq = 2 * nu_agent * num_blocks;// Total inequality constraints
 
-    // 1. Agent Continuous & Discrete-Time System Dynamics (dt = 0.1s)
     double dt = 0.1;
     Eigen::MatrixXd A_sys(nx_agent, nx_agent);
     A_sys << 1.0,  dt, 0.5 * dt * dt, 0.0,
@@ -74,11 +73,10 @@ void build_multi_agent_platoon_problem(int M, int N,
     Eigen::VectorXd B_sys(nx_agent);
     B_sys << 0.0, 0.0, dt, 0.0;
 
-    // Initial state per agent
     Eigen::VectorXd x_init_single(nx_agent);
     x_init_single << 1.0, 0.2, -0.1, 0.5;
 
-    // 2. Build QP Cost Matrix P (Stage block size B = 5)
+    //P matrix
     P.resize(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int b = 0; b < num_blocks; b++) {
@@ -94,7 +92,7 @@ void build_multi_agent_platoon_problem(int M, int N,
 
     c = Eigen::VectorXd::Zero(n);
 
-    // 3. Build Equality Dynamics Matrix A_eq * x = b_eq
+    //A_eq matrix
     A_eq.resize(p, n);
     std::vector<Eigen::Triplet<double>> A_triplets;
     b_eq = Eigen::VectorXd::Zero(p);
@@ -104,16 +102,13 @@ void build_multi_agent_platoon_problem(int M, int N,
         int col_curr = b * block_size;
         int col_prev = (b - 1) * block_size;
 
-        // Identity for x_k
         for (int r = 0; r < nx_agent; r++) {
             A_triplets.push_back(Eigen::Triplet<double>(row_offset + r, col_curr + r, 1.0));
         }
 
         if (b == 0) {
-            // Initial block constraint
             b_eq.head(nx_agent) = x_init_single;
         } else {
-            // Transition from previous block: x_k - A_sys * x_{k-1} - B_sys * u_{k-1} = 0
             for (int r = 0; r < nx_agent; r++) {
                 for (int col = 0; col < nx_agent; col++) {
                     if (std::abs(A_sys(r, col)) > 1e-12) {
@@ -129,7 +124,7 @@ void build_multi_agent_platoon_problem(int M, int N,
     A_eq.setFromTriplets(A_triplets.begin(), A_triplets.end());
     A_eq.makeCompressed();
 
-    // 4. Build Inequality Constraints G_ineq * x <= h_ineq (-1.0 <= u <= 1.0)
+    //inequality constraints G_ineq * x <= h_ineq 
     G_ineq.resize(m_ineq, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int b = 0; b < num_blocks; b++) {
@@ -169,15 +164,13 @@ MassSolverResult run_mass_benchmark(int M, int N)
     res.N = N;
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
-    std::cout << "  COLD START BENCHMARK: Platoon Units M = " << M
+    std::cout << "\n" << std::endl;
+    std::cout << "  Cold Start Benchmark: Masses M = " << M
               << " (Horizon N = " << N << ", Vars n = " << n << ", Block B = " << block_size << ")" << std::endl;
     std::cout << "==========================================================" << std::endl;
 
-    // ----------------------------------------------------
-    // 1. IPM-ADMM-CG Solver (Cold Start)
-    // ----------------------------------------------------
-    std::cout << "--> Running IPM-ADMM-CG (Cold Start)..." << std::endl;
+    //IPM-ADMM-CG Solver (Cold Start)
+    std::cout << "Running IPM-ADMM-CG (Cold Start)\n" << std::endl;
     Eigen::VectorXd x_sol = Eigen::VectorXd::Zero(n);
     Eigen::VectorXd s_sol = Eigen::VectorXd::Ones(m_ineq);
     Eigen::VectorXd y_sol = Eigen::VectorXd::Zero(p);
@@ -200,14 +193,12 @@ MassSolverResult run_mass_benchmark(int M, int N)
     res.custom_time_ms = dur_custom.count();
     std::cout << "    [IPM-ADMM-CG] Time: " << res.custom_time_ms << " ms | IPM Iters: " << custom_admm << " | CG Iters: " << custom_cg << std::endl;
 
-    // ----------------------------------------------------
-    // 2. OSQP Solver (Cold Start)
-    // ----------------------------------------------------
+    //OSQP Solver (Cold Start)
     std::cout << "--> Running OSQP (Cold Start)..." << std::endl;
     int osqp_num_ineq = nu * num_blocks;
     int m_osqp = p + osqp_num_ineq;
 
-    // P upper triangular for OSQP
+    // P upper triangular: OSQP
     std::vector<Eigen::Triplet<double>> P_osqp_triplets;
     for (int b = 0; b < num_blocks; b++) {
         int start = b * block_size;
@@ -221,7 +212,7 @@ MassSolverResult run_mass_benchmark(int M, int N)
     P_osqp.setFromTriplets(P_osqp_triplets.begin(), P_osqp_triplets.end());
     P_osqp.makeCompressed();
 
-    // Build OSQP A matrix
+    //OSQP A matrix
     Eigen::SparseMatrix<double, Eigen::ColMajor, OSQPInt> A_osqp(m_osqp, n);
     std::vector<Eigen::Triplet<double>> A_osqp_triplets;
 
@@ -280,10 +271,8 @@ MassSolverResult run_mass_benchmark(int M, int N)
     OSQPCscMatrix_free(A_csc);
     free(settings);
 
-    // ----------------------------------------------------
-    // 3. PIQP Solver (Cold Start)
-    // ----------------------------------------------------
-    std::cout << "--> Running PIQP (Cold Start)..." << std::endl;
+    //PIQP Solver (Cold Start)
+    std::cout << "Running PIQP (Cold Start)\n" << std::endl;
     piqp::SparseSolver<double> piqp_solver;
     piqp_solver.settings().verbose = false;
     piqp_solver.settings().compute_timings = true;
@@ -304,15 +293,15 @@ MassSolverResult run_mass_benchmark(int M, int N)
 
 int main()
 {
-    int N_fixed = 20; // Fixed horizon per agent
+    int N_fixed = 20; // Fixed horizon
     std::vector<int> M_values = {2, 5, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150};
     std::vector<MassSolverResult> results;
 
-    std::cout << "==========================================================" << std::endl;
-    std::cout << "  MULTI-AGENT PLATOON MPC SCALING BENCHMARK (COLD STARTS)" << std::endl;
+    std::cout << "\n" << std::endl;
+    std::cout << "  Masses MPC Scaling Benchmark (Cold Starts)" << std::endl;
     std::cout << "  Fixed Horizon N = " << N_fixed << " per unit" << std::endl;
     std::cout << "  Solvers: IPM-ADMM-CG, OSQP, PIQP (Cold Starts)" << std::endl;
-    std::cout << "  Platoon Units M: 2 to 150 (Variables n up to 15,000)" << std::endl;
+    std::cout << "  M: 2 to 150 (Variables n up to 15,000)" << std::endl;
     std::cout << "==========================================================" << std::endl;
 
     for (int M_val : M_values) {
@@ -320,8 +309,7 @@ int main()
     }
 
     std::cout << "\n\n";
-    std::cout << "=========================================================================================================================" << std::endl;
-    std::cout << "                                   MULTI-AGENT SCALING BENCHMARK SUMMARY (COLD START)                                    " << std::endl;
+    std::cout << " Masses MPC Scaling Benchmark Summary (Cold Starts) " << std::endl;
     std::cout << "=========================================================================================================================" << std::endl;
     std::cout << " M   | nx | nu | Vars (n) | IPM-ADMM-CG (ms) | IPM Iters | OSQP Total (ms) | OSQP Solve (ms) | OSQP Iters | PIQP (ms) | PIQP Iters " << std::endl;
     std::cout << "-------------------------------------------------------------------------------------------------------------------------" << std::endl;

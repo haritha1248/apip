@@ -14,7 +14,7 @@
 
 namespace ipm_admm_cg {
 
-// C++17 inline FLOP counter for algorithmic complexity analysis
+//algorithm complexity analysis global flop counter
 inline size_t global_flop_count = 0;
 
 inline void reset_flop_count() {
@@ -27,26 +27,26 @@ inline size_t get_flop_count() {
 
 class ADMMKKTSolver {
 private:
-    // Problem matrices
+    //problem matrixes
     Eigen::SparseMatrix<double> P;
     Eigen::SparseMatrix<double> A;
     Eigen::SparseMatrix<double> G;
 
-    // Transposes
+    //transposed
     Eigen::SparseMatrix<double> AT;
     Eigen::SparseMatrix<double> GT;
 
-    // Precomputed products
+    //precomputed matrices
     Eigen::SparseMatrix<double> AtA;
     Eigen::VectorXd GtG_diag;
     Eigen::VectorXd diag_term;
 
-    // Regularization parameters
+    //regularization
     double delta;
     Eigen::VectorXd x_reg;
     Eigen::VectorXd z_reg_inv;
 
-    // Block Thomas Preconditioner
+    //block thomas precondition
     int precond_block_size = 2;
     std::vector<int> block_szs;
     std::vector<int> block_starts;
@@ -54,25 +54,23 @@ private:
     std::vector<Eigen::MatrixXd> C_prime;
     std::vector<Eigen::MatrixXd> U_blocks;
 
-    // Precomputed constant block parts to avoid coeff() calls in update()
+    //constant block parts
     std::vector<Eigen::MatrixXd> P_block;
     std::vector<Eigen::MatrixXd> AtA_block;
     std::vector<Eigen::MatrixXd> P_U_block;
     std::vector<Eigen::MatrixXd> AtA_U_block;
 
-    // Mapping variables to inequality constraints
     std::vector<std::vector<int>> var_to_constraints;
 
-    // ADMM settings
+    //admm parameters
     double rho = 1.0;
     int max_admm_iter = 200;
     double admm_tol = 1e-8;
 
-    // CG settings (Relaxed to 1e-4 for fast convergence)
+    //CG parameters
     int max_cg_iter = 500;
-    double cg_tol = 1e-4;
+    double cg_tol = 1e-4; //low tolerance for convergence
 
-    // Preallocated contiguous memory buffers to eliminate dynamic memory allocations in loops
     mutable Eigen::VectorXd temp_n1;
     mutable Eigen::VectorXd cg_r;
     mutable Eigen::VectorXd cg_w;
@@ -92,10 +90,10 @@ public:
         AT = A.transpose();
         GT = G.transpose();
 
-        // Precompute sparsity patterns and base products
+        //precompute
         AtA = AT * A;
 
-        // Initialize block structures for Thomas solver
+        //thomas block structure
         int n = P.rows();
         int B = precond_block_size;
         int N = (n + B - 1) / B;
@@ -107,7 +105,7 @@ public:
             block_szs[i] = std::min(B, n - block_starts[i]);
         }
 
-        // Pre-extract constant blocks using coeff() once during setup
+        //pre extract blocks
         P_block.resize(N);
         AtA_block.resize(N);
         P_U_block.resize(N - 1);
@@ -146,7 +144,7 @@ public:
             }
         }
 
-        // Initialize constraint mapping for G
+        //map constraints for G
         int m = G.rows();
         var_to_constraints.resize(n);
         for (int k = 0; k < G.outerSize(); ++k)
@@ -159,7 +157,7 @@ public:
             }
         }
 
-        // Resize all temporaries and workspace vectors ONCE in constructor
+        //resize
         temp_n1.resize(n);
         cg_r.resize(n);
         cg_w.resize(n);
@@ -183,7 +181,7 @@ public:
         x_reg = x_reg_in;
         rho = rho_in;
 
-        // Invert z_reg safely
+        //z reg inversion
         z_reg_inv.resize(z_reg_in.size());
         for (int i = 0; i < z_reg_in.size(); i++)
         {
@@ -198,7 +196,7 @@ public:
             }
         }
 
-        // Compute GtG diagonal on-the-fly without sparse multiplication
+        //GtG diagonal: compute
         int n = P.rows();
         GtG_diag.setZero(n);
         for (int i = 0; i < n; i++)
@@ -212,10 +210,9 @@ public:
             global_flop_count += var_to_constraints[i].size();
         }
 
-        // Cache combined diagonal term
         diag_term = x_reg + GtG_diag;
 
-        // Precompute block-diagonal factorization of M_spd
+        //precompute factorization of M_spd
         int B = precond_block_size;
         int N = (n + B - 1) / B;
 
@@ -226,26 +223,26 @@ public:
             int gr = block_starts[i];
             int block_sz = block_szs[i];
 
-            // 1. Build D_i = P_block + delta_inv * AtA_block + diag(x_reg + rho + GtG_diag)
+            //build D i
             Eigen::MatrixXd D_i = P_block[i] + delta_inv * AtA_block[i];
             for (int r = 0; r < block_sz; r++)
             {
                 D_i(r, r) += x_reg(gr + r) + rho + GtG_diag(gr + r);
             }
 
-            // 2. Compute Gamma_i = D_i - U_{i-1}^T * C'_{i-1}
+            //compute Gamma
             Eigen::MatrixXd Gamma_i = D_i;
             if (i > 0)
             {
                 Gamma_i -= U_blocks[i - 1].transpose() * C_prime[i - 1];
             }
 
-            // 3. Factorize Gamma_i
+            //factor Gamma_i
             llt_blocks[i].compute(Gamma_i);
             
             global_flop_count += (block_sz * block_sz * block_sz) / 3;
 
-            // 4. Compute C_prime[i] and store U_blocks[i]
+            //find C prime
             if (i < N - 1)
             {
                 Eigen::MatrixXd U_i = P_U_block[i] + delta_inv * AtA_U_block[i];
@@ -255,20 +252,20 @@ public:
         }
     }
 
-    // Apply the KKT system shifted operator: M_spd * x
+    //M_spd * x
     inline void apply_spd(const Eigen::VectorXd& x, Eigen::VectorXd& y) const
     {
         int n = P.rows();
 
-        // 1. y = P * x
+        //y = P * x
         y = P * x;
         global_flop_count += 2 * P.nonZeros();
 
-        // 2. y += (diag_term + rho) * x (combines regularization, ADMM rho, and inequality diagonal)
+        //y += (diag_term + rho) * x 
         y.array() += (diag_term.array() + rho) * x.array();
         global_flop_count += 3 * n;
 
-        // 3. y += delta_inv * A^T * A * x
+        //y += delta_inv * A^T * A * x
         if (A.rows() > 0)
         {
             temp_n1 = AtA * x;
@@ -277,7 +274,7 @@ public:
         }
     }
 
-    // Zero-allocation Conjugate Gradient (CG) solver using contiguous pre-allocated buffers
+    //solve cg system
     int solve_cg(const Eigen::VectorXd& b, Eigen::VectorXd& x, bool warm_start = false) const
     {
         int size = b.size();
@@ -300,7 +297,7 @@ public:
 
         int N_thomas = block_starts.size();
         
-        // Forward sweep using contiguous buffer segment views
+        // Forward sweep
         cg_d_prime.segment(block_starts[0], block_szs[0]) = llt_blocks[0].solve(cg_r.segment(block_starts[0], block_szs[0]));
         global_flop_count += 2 * block_szs[0] * block_szs[0];
         
@@ -311,7 +308,7 @@ public:
             global_flop_count += 2 * block_szs[i] * block_szs[i] + 2 * block_szs[i] * block_szs[i - 1];
         }
         
-        // Backward substitution into contiguous cg_w
+        // Backward sweep: cg_w
         cg_w.segment(block_starts[N_thomas - 1], block_szs[N_thomas - 1]) = cg_d_prime.segment(block_starts[N_thomas - 1], block_szs[N_thomas - 1]);
         for (int i = N_thomas - 2; i >= 0; i--)
         {
@@ -343,7 +340,7 @@ public:
                 break;
             }
 
-            // Zero-alloc forward sweep
+            //forward sweep
             cg_d_prime_new.segment(block_starts[0], block_szs[0]) = llt_blocks[0].solve(cg_r.segment(block_starts[0], block_szs[0]));
             global_flop_count += 2 * block_szs[0] * block_szs[0];
             
@@ -354,7 +351,7 @@ public:
                 global_flop_count += 2 * block_szs[i] * block_szs[i] + 2 * block_szs[i] * block_szs[i - 1];
             }
             
-            // Zero-alloc backward substitution
+            //backward sweep
             cg_w_new.segment(block_starts[N_thomas - 1], block_szs[N_thomas - 1]) = cg_d_prime_new.segment(block_starts[N_thomas - 1], block_szs[N_thomas - 1]);
             for (int i = N_thomas - 2; i >= 0; i--)
             {
@@ -376,7 +373,7 @@ public:
         return k;
     }
 
-    // ADMM loop to solve KKT system, returns ADMM iterations and sets total_cg_iters
+    //admm solve
     int solve(const Eigen::VectorXd& rhs_x,
               const Eigen::VectorXd& rhs_y,
               const Eigen::VectorXd& rhs_z,
@@ -395,7 +392,7 @@ public:
 
         double delta_inv = 1.0 / delta;
 
-        // Precompute constant RHS terms
+        //precompute rhs constants
         Eigen::VectorXd rhs_total = rhs_x;
         if (A.rows() > 0)
         {
@@ -412,22 +409,22 @@ public:
         int iter = 0;
         for (; iter < max_admm_iter; iter++)
         {
-            // 1. x-update: solve (M_spd) * dx = rhs_total + rho * (z - u)
+            //x-update
             temp = rhs_total + rho * (z - u);
             global_flop_count += 3 * n;
 
             int cg_iters = solve_cg(temp, dx, warm_start_cg);
             total_cg_iters += cg_iters;
 
-            // 2. z-update
+            //z-update
             z = dx + u;
             global_flop_count += n;
 
-            // 3. u-update
+            //u-update
             u += dx - z;
             global_flop_count += 2 * n;
 
-            // Check convergence using squared norm
+            //check convergence
             double diff_norm2 = (dx - z).squaredNorm();
             if (diff_norm2 < admm_tol * admm_tol)
             {
@@ -438,7 +435,7 @@ public:
             global_flop_count += 3 * n;
         }
 
-        // Recover dual steps
+        //recover dual steps
         if (A.rows() > 0)
         {
             dy = delta_inv * (A * dx - rhs_y);
@@ -465,22 +462,22 @@ private:
 
     int n, p, m;
 
-    // Solver settings
+    //ipm parameters
     int max_ipm_iter = 100;
-    double ipm_tol = 1e-6;
+    double ipm_tol = 1e-6; 
     double centering_param = 0.2;
-    double tau = 0.99;
+    double tau = 0.99; //must stay
 
-    // Regularization parameters
+    //pmm regularization terms
     double delta = 1e-8;
     double x_reg_val = 1e-8;
     double sigma_z = 1e-8;
 
-    // Preconditioner settings
+    //precond set
     int precond_block_size = 2;
     double beta_rho = 0.1;
 
-    // Relaxed CG tolerance setting (default: 1e-4)
+    //lower cg tol
     double cg_tol_val = 1e-4;
 
 public:
@@ -528,7 +525,7 @@ public:
     bool solve(Eigen::VectorXd& x_sol, Eigen::VectorXd& s_sol, Eigen::VectorXd& y_sol, Eigen::VectorXd& z_sol,
                int& total_admm_iters, int& total_cg_iters, bool warm_start = false, bool warm_start_cg = false)
     {
-        // 1. Initialize variables or warm start with Interior-Shifted Barrier Protocol
+        //init variables /(warm start)
         if (!warm_start)
         {
             x_sol = Eigen::VectorXd::Zero(n);
@@ -543,7 +540,7 @@ public:
             if (y_sol.size() != p) y_sol = Eigen::VectorXd::Zero(p);
             if (z_sol.size() != m) z_sol = Eigen::VectorXd::Ones(m);
 
-            // Interior-Shifted Barrier Protocol: Project and shift slack/dual variables
+            //project slack / dual variables (interior shifted barrier protocol)
             double current_gap = (m > 0) ? s_sol.dot(z_sol) / m : 1e-4;
             double target_shift = std::max(1e-4, std::min(0.1, std::sqrt(current_gap)));
 
@@ -559,12 +556,12 @@ public:
             }
         }
 
-        // Proximal centers
+        //prox center
         Eigen::VectorXd x_bar = x_sol;
         Eigen::VectorXd y_bar = y_sol;
         Eigen::VectorXd z_bar = z_sol;
 
-        // Initialize inner KKT solver
+        //init kkt solver
         ADMMKKTSolver kkt_solver(P, A, G, precond_block_size);
         kkt_solver.set_cg_tolerance(cg_tol_val);
 
@@ -576,7 +573,7 @@ public:
 
         for (int iter = 0; iter < max_ipm_iter; iter++)
         {
-            // Compute residuals
+            //residuals
             r_dual = P * x_sol + c + (x_reg_val * (x_sol - x_bar));
             global_flop_count += 2 * P.nonZeros() + 4 * n;
 
@@ -605,7 +602,7 @@ public:
             double duality_gap = (m > 0) ? s_sol.dot(z_sol) : 0.0;
             if (m > 0) global_flop_count += 2 * m;
 
-            // Check convergence
+            //check convergence
             double r_dual_norm = r_dual.lpNorm<Eigen::Infinity>();
             double r_eq_norm = (p > 0) ? r_eq.lpNorm<Eigen::Infinity>() : 0.0;
             double r_ineq_norm = (m > 0) ? r_ineq.lpNorm<Eigen::Infinity>() : 0.0;
@@ -619,13 +616,13 @@ public:
                 return true;
             }
 
-            // Barrier parameter & Adaptive KKT Regularization
+            //barrier mu & adaptive rho
             double mu_curr = (m > 0) ? (duality_gap / m) : 0.0;
             double r_eq_inf = (p > 0) ? r_eq.lpNorm<Eigen::Infinity>() : 0.0;
             double r_ineq_inf = (m > 0) ? r_ineq.lpNorm<Eigen::Infinity>() : 0.0;
             double adaptive_rho = std::max(1e-8, beta_rho * std::max(r_eq_inf, r_ineq_inf));
 
-            // Update KKT solver regularization
+            //update regularization params
             Eigen::VectorXd x_reg_vec = Eigen::VectorXd::Constant(n, x_reg_val);
             Eigen::VectorXd z_reg_vec(m);
             for (int i = 0; i < m; i++)
@@ -639,7 +636,7 @@ public:
             Eigen::VectorXd rhs_y = -r_eq;
             Eigen::VectorXd rhs_z(m);
 
-            // Standard Path-Following Step (Fast 1 linear solve per iteration)
+            //step
             double mu = (m > 0) ? centering_param * (duality_gap / m) : 0.0;
             for (int i = 0; i < m; i++)
             {
@@ -663,7 +660,7 @@ public:
                       << ", Inner ADMM Iters = " << step_admm_iters 
                       << ", Inner CG Iters = " << step_cg_iters << std::endl;
 
-            // Step size computation (fraction-to-boundary rule)
+            //step size
             double alpha_prim = 1.0;
             double alpha_dual = 1.0;
 
@@ -671,7 +668,7 @@ public:
             {
                 if (ds(i) < 0)
                 {
-                    alpha_prim = std::min(alpha_prim, -tau * s_sol(i) / ds(i));
+                    alpha_prim = std::min(alpha_prim, -tau * s_sol(i) / ds(i)); //fraction - to - boundary rule
                     global_flop_count += 3;
                 }
                 if (dz(i) < 0)
@@ -681,7 +678,7 @@ public:
                 }
             }
 
-            // Update variables
+            //updates
             x_sol += alpha_prim * dx;
             s_sol += alpha_prim * ds;
             global_flop_count += 2 * n + 2 * m;
@@ -697,17 +694,17 @@ public:
                 global_flop_count += 2 * m;
             }
 
-            // PMM Update: Shift proximal centers
+            //shift pmm centers
             x_bar = x_sol;
             y_bar = y_sol;
             z_bar = z_sol;
         }
 
-        std::cout << "IPM failed to converge within maximum iterations." << std::endl;
+        std::cout << "IPM failed converging within max iterations." << std::endl;
         return false;
     }
 };
 
 } // namespace ipm_admm_cg
 
-#endif // IPM_ADMM_CG_ADMM_KKT_SOLVER_HPP
+#endif 

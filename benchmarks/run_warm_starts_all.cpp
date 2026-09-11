@@ -20,33 +20,32 @@ struct WarmResult {
     int N;
     int n;
 
-    // IPM-ADMM-CG Warm
+    //IPM-ADMM-CG Warm
     int custom_ipm_iters;
     int custom_cg_iters;
     double custom_time_ms;
     bool custom_success;
 
-    // OSQP Warm
+    //OSQP Warm
     int osqp_iters;
     double osqp_solve_ms;
     bool osqp_success;
 
-    // PIQP Warm
+    //PIQP Warm
     int piqp_iters;
     double piqp_solve_ms;
     bool piqp_success;
 };
 
-// Computes exact ZOH discrete dynamics for classic Wang-Boyd 6-mass, 7-spring, 3-actuator system
+//6-mass, 7-spring, 3-actuator example
 void compute_wang_boyd_discrete_matrices(double dt,
                                          Eigen::MatrixXd& A_sys,
                                          Eigen::MatrixXd& B_sys)
 {
     const int n_masses = 6;
-    const int nx = 2 * n_masses; // 12 states: [p1, v1, p2, v2, p3, v3, p4, v4, p5, v5, p6, v6]
-    const int nu = 3;            // 3 tension actuators
+    const int nx = 2 * n_masses; // 12 states
+    const int nu = 3;            // 3 actuators
 
-    // Stiffness matrix K (6x6 tridiagonal: 6 unit masses connected by 7 unit springs between fixed walls)
     Eigen::MatrixXd K = Eigen::MatrixXd::Zero(n_masses, n_masses);
     for (int i = 0; i < n_masses; i++) {
         K(i, i) = 2.0;
@@ -54,17 +53,16 @@ void compute_wang_boyd_discrete_matrices(double dt,
         if (i < n_masses - 1) K(i, i + 1) = -1.0;
     }
 
-    // Damping matrix D
+    //damping
     double damping = 0.1;
     Eigen::MatrixXd D = damping * Eigen::MatrixXd::Identity(n_masses, n_masses);
 
-    // Actuator placement matrix B_u (6x3): tension forces acting across pairs of masses
+    //tension forces across masses
     Eigen::MatrixXd B_u = Eigen::MatrixXd::Zero(n_masses, nu);
     B_u(0, 0) =  1.0; B_u(1, 0) = -1.0;
     B_u(2, 1) =  1.0; B_u(3, 1) = -1.0;
     B_u(4, 2) =  1.0; B_u(5, 2) = -1.0;
 
-    // Continuous state matrix A_c and B_c for interleaved states [p1, v1, p2, v2, ...]
     Eigen::MatrixXd A_c = Eigen::MatrixXd::Zero(nx, nx);
     Eigen::MatrixXd B_c = Eigen::MatrixXd::Zero(nx, nu);
 
@@ -84,7 +82,6 @@ void compute_wang_boyd_discrete_matrices(double dt,
         }
     }
 
-    // Exact Van Loan matrix exponential discretization
     Eigen::MatrixXd M = Eigen::MatrixXd::Zero(nx + nu, nx + nu);
     M.block(0, 0, nx, nx) = A_c * dt;
     M.block(0, nx, nx, nu) = B_c * dt;
@@ -111,7 +108,7 @@ void build_wang_boyd_mass_spring_problem(int N,
     const int p = nx * N;
     const int m = 2 * nu * N;
 
-    // 1. Cost Matrix P
+    //P matrix
     P.resize(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int i = 0; i < N; i++) {
@@ -129,7 +126,7 @@ void build_wang_boyd_mass_spring_problem(int N,
 
     c = Eigen::VectorXd::Zero(n);
 
-    // 2. Equality Matrix A_eq
+    //A_eq matrix
     A_eq.resize(p, n);
     std::vector<Eigen::Triplet<double>> A_triplets;
     for (int r = 0; r < nx; r++) {
@@ -160,7 +157,7 @@ void build_wang_boyd_mass_spring_problem(int N,
     b_eq = Eigen::VectorXd::Zero(p);
     b_eq.head(nx) = x_init;
 
-    // 3. Inequality Matrix G_ineq
+    //G_ineq matrix
     G_ineq.resize(m, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int i = 0; i < N; i++) {
@@ -193,15 +190,15 @@ WarmResult run_warm_benchmark_for_N(int N,
     res.N = N;
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
     std::cout << "  RUNNING WARM START BENCHMARK: Horizon N = " << N << " (Variables n = " << n << ")" << std::endl;
     std::cout << "  Wang-Boyd Classic: 6 Masses, 7 Springs, 3 Actuators" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
 
     Eigen::VectorXd x_init1(nx);
     x_init1 << 1.0, 0.0, -0.5, 0.0, 0.5, 0.0, -0.2, 0.0, 0.3, 0.0, -0.1, 0.0;
 
-    Eigen::VectorXd x_init2 = 0.9 * x_init1; // 10% shifted state for warm start test
+    Eigen::VectorXd x_init2 = 0.9 * x_init1; 
 
     Eigen::SparseMatrix<double> P;
     Eigen::VectorXd c;
@@ -215,16 +212,13 @@ WarmResult run_warm_benchmark_for_N(int N,
     Eigen::VectorXd b_eq2 = b_eq1;
     b_eq2.head(nx) = x_init2;
 
-    // ----------------------------------------------------
-    // 1. IPM-ADMM-CG Warm Start
-    // ----------------------------------------------------
-    std::cout << "--> Running IPM-ADMM-CG Warm Start..." << std::endl;
+    //IPM-ADMM-CG Warm Start
+    std::cout << "Running IPM-ADMM-CG Warm Start" << std::endl;
     Eigen::VectorXd x_sol = Eigen::VectorXd::Zero(n);
     Eigen::VectorXd s_sol = Eigen::VectorXd::Ones(m_g);
     Eigen::VectorXd y_sol = Eigen::VectorXd::Zero(p);
     Eigen::VectorXd z_sol = Eigen::VectorXd::Ones(m_g);
 
-    // First solve nominal problem to get warm-start point
     ProximalIPMSolver custom_solver1(P, c, A_eq, b_eq1, G_ineq, h_ineq);
     custom_solver1.set_settings(100, 1e-5, 0.15);
     custom_solver1.set_regularization(1e-8, 1e-8, 1e-8);
@@ -233,7 +227,7 @@ WarmResult run_warm_benchmark_for_N(int N,
     int dummy_admm = 0, dummy_cg = 0;
     custom_solver1.solve(x_sol, s_sol, y_sol, z_sol, dummy_admm, dummy_cg, false, false);
 
-    // Warm-start solve on perturbed problem
+    //warm start solve
     ProximalIPMSolver custom_solver2(P, c, A_eq, b_eq2, G_ineq, h_ineq);
     custom_solver2.set_settings(100, 1e-5, 0.15);
     custom_solver2.set_regularization(1e-8, 1e-8, 1e-8);
@@ -251,10 +245,8 @@ WarmResult run_warm_benchmark_for_N(int N,
     res.custom_time_ms = dur_custom.count();
     std::cout << "    [IPM-ADMM-CG Warm] Time: " << res.custom_time_ms << " ms | IPM Iters: " << custom_admm << " | CG Iters: " << custom_cg << std::endl;
 
-    // ----------------------------------------------------
-    // 2. OSQP Warm Start
-    // ----------------------------------------------------
-    std::cout << "--> Running OSQP Warm Start..." << std::endl;
+    //OSQP Warm Start
+    std::cout << "Running OSQP Warm Start" << std::endl;
     int m_ineq = nu * N;
     int m_osqp = p + m_ineq;
 
@@ -328,7 +320,7 @@ WarmResult run_warm_benchmark_for_N(int N,
     osqp_setup(&osqp_solver, P_csc, c.data(), A_csc, l1.data(), u1.data(), m_osqp, n, settings);
     osqp_solve(osqp_solver);
 
-    // Warm start with optimal solution
+    //warm start
     std::vector<double> osqp_x(n), osqp_y(m_osqp);
     for (int i = 0; i < n; i++) osqp_x[i] = osqp_solver->solution->x[i];
     for (int i = 0; i < m_osqp; i++) osqp_y[i] = osqp_solver->solution->y[i];
@@ -352,19 +344,17 @@ WarmResult run_warm_benchmark_for_N(int N,
     OSQPCscMatrix_free(A_csc);
     free(settings);
 
-    // ----------------------------------------------------
-    // 3. PIQP Warm Start
-    // ----------------------------------------------------
-    std::cout << "--> Running PIQP Warm Start..." << std::endl;
+    //PIQP Warm Start
+    std::cout << "Running PIQP Warm Start" << std::endl;
     piqp::SparseSolver<double> piqp_solver;
     piqp_solver.settings().verbose = false;
     piqp_solver.settings().compute_timings = true;
 
-    // Initial setup and solve
+    //setup
     piqp_solver.setup(P, c, A_eq, b_eq1, G_ineq, piqp::nullopt, h_ineq, piqp::nullopt, piqp::nullopt);
     piqp_solver.solve();
 
-    // Warm start update
+    //update
     piqp_solver.update(piqp::nullopt, piqp::nullopt, piqp::nullopt, b_eq2, piqp::nullopt, piqp::nullopt, h_ineq, piqp::nullopt, piqp::nullopt);
 
     auto t1_piqp_warm = std::chrono::high_resolution_clock::now();
@@ -382,27 +372,24 @@ WarmResult run_warm_benchmark_for_N(int N,
 
 int main()
 {
-    std::cout << "Computing continuous-to-discrete system matrices for Wang-Boyd benchmark (dt = 0.5s)..." << std::endl;
     Eigen::MatrixXd A_sys, B_sys;
     compute_wang_boyd_discrete_matrices(0.5, A_sys, B_sys);
 
     std::vector<int> N_values = {1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
     std::vector<WarmResult> results;
 
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
     std::cout << "  WANG-BOYD 6-MASS 7-SPRING MPC BENCHMARK: WARM STARTS" << std::endl;
     std::cout << "  Solvers: IPM-ADMM-CG, OSQP, PIQP" << std::endl;
     std::cout << "  Horizons N: 1000 to 10000" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
 
     for (int N_val : N_values) {
         results.push_back(run_warm_benchmark_for_N(N_val, A_sys, B_sys));
     }
 
     std::cout << "\n\n";
-    std::cout << "=========================================================================================================" << std::endl;
-    std::cout << "                               WANG-BOYD WARM-START COMPARISON SUMMARY TABLE                             " << std::endl;
-    std::cout << "=========================================================================================================" << std::endl;
+    std::cout << "WANG-BOYD WARM-START COMPARISON SUMMARY TABLE\n" << std::endl;
     std::cout << "  N   | Variables (n) | IPM-ADMM-CG (ms) | IPM-ADMM Iters | OSQP Solve (ms) | OSQP Iters | PIQP Time (ms) | PIQP Iters " << std::endl;
     std::cout << "---------------------------------------------------------------------------------------------------------" << std::endl;
 
@@ -416,9 +403,9 @@ int main()
                   << std::setw(14) << std::fixed << std::setprecision(2) << r.piqp_solve_ms << " | "
                   << std::setw(10) << r.piqp_iters << std::endl;
     }
-    std::cout << "=========================================================================================================" << std::endl;
+    std::cout << "---------------------------------------------------------------------------------------------------------" << std::endl;
 
-    // Save summary to text file
+    //txt file
     std::ofstream outfile("warm_start_scaling_results.txt");
     if (outfile.is_open()) {
         outfile << "N\tVariables(n)\tIPM-ADMM-CG(ms)\tIPM-ADMM_Iters\tOSQP_Solve(ms)\tOSQP_Iters\tPIQP_Time(ms)\tPIQP_Iters\n";
@@ -429,7 +416,6 @@ int main()
                     << r.piqp_solve_ms << "\t" << r.piqp_iters << "\n";
         }
         outfile.close();
-        std::cout << "\nResults saved to warm_start_scaling_results.txt" << std::endl;
     }
 
     return 0;

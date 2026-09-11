@@ -19,7 +19,7 @@ struct MassBenchmarkResult {
     int M;
     int n;
     
-    // Cold Start
+    //cold start
     double cold_custom_ms;
     int cold_custom_ipm_iters;
     int cold_custom_cg_iters;
@@ -34,7 +34,7 @@ struct MassBenchmarkResult {
     int cold_piqp_iters;
     bool cold_piqp_success;
 
-    // Warm Start
+    //warm start
     double warm_custom_ms;
     int warm_custom_ipm_iters;
     int warm_custom_cg_iters;
@@ -164,14 +164,12 @@ MassBenchmarkResult run_mass_benchmark(int M, int N)
     res.M = M;
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
-    std::cout << "  RUNNING BENCHMARK: Platoon Masses M = " << M
+    std::cout << "\n" << std::endl;
+    std::cout << "  MPC Benchmark: Masses M = " << M
               << " (Horizon N = " << N << ", Vars n = " << n << ")" << std::endl;
     std::cout << "==========================================================" << std::endl;
 
-    // ----------------------------------------------------
-    // 1. IPM-ADMM-CG Solver (Cold Start)
-    // ----------------------------------------------------
+    //IPM-ADMM-CG Solver (Cold Start)
     Eigen::VectorXd x_sol = Eigen::VectorXd::Zero(n);
     Eigen::VectorXd s_sol = Eigen::VectorXd::Ones(m_ineq);
     Eigen::VectorXd y_sol = Eigen::VectorXd::Zero(p);
@@ -193,9 +191,7 @@ MassBenchmarkResult run_mass_benchmark(int M, int N)
     res.cold_custom_cg_iters = custom_cg;
     res.cold_custom_ms = dur_custom.count();
 
-    // ----------------------------------------------------
-    // 2. OSQP Solver (Cold Start)
-    // ----------------------------------------------------
+    //OSQP Solver (Cold Start)
     int osqp_num_ineq = nu * num_blocks;
     int m_osqp = p + osqp_num_ineq;
 
@@ -263,11 +259,9 @@ MassBenchmarkResult run_mass_benchmark(int M, int N)
     res.cold_osqp_solve_ms = dur_osqp_solve.count();
     res.cold_osqp_total_ms = dur_osqp_setup.count() + res.cold_osqp_solve_ms;
 
-    // ----------------------------------------------------
     // OSQP Warm Start
-    // ----------------------------------------------------
     Eigen::VectorXd b_eq_warm = b_eq;
-    b_eq_warm(0) += 0.05; // slight perturbation in initial condition
+    b_eq_warm(0) += 0.05; 
     l_osqp.head(p) = b_eq_warm;
     u_osqp.head(p) = b_eq_warm;
     osqp_update_data_vec(osqp_solver, nullptr, l_osqp.data(), u_osqp.data());
@@ -286,9 +280,8 @@ MassBenchmarkResult run_mass_benchmark(int M, int N)
     OSQPCscMatrix_free(A_csc);
     free(settings);
 
-    // ----------------------------------------------------
-    // 3. PIQP Solver (Cold & Warm Start)
-    // ----------------------------------------------------
+
+    //PIQP Solver (Cold & Warm Start)
     piqp::SparseSolver<double> piqp_solver;
     piqp_solver.settings().verbose = false;
     piqp_solver.settings().compute_timings = true;
@@ -303,7 +296,7 @@ MassBenchmarkResult run_mass_benchmark(int M, int N)
     res.cold_piqp_iters = piqp_solver.result().info.iter;
     res.cold_piqp_ms = dur_piqp.count();
 
-    // PIQP Warm start
+    //PIQP Warm start
     piqp_solver.update(piqp::nullopt, piqp::nullopt, piqp::nullopt, b_eq_warm, piqp::nullopt, piqp::nullopt, piqp::nullopt, piqp::nullopt, piqp::nullopt);
     auto t1_piqp_warm = std::chrono::high_resolution_clock::now();
     piqp_status = piqp_solver.solve();
@@ -314,9 +307,7 @@ MassBenchmarkResult run_mass_benchmark(int M, int N)
     res.warm_piqp_iters = piqp_solver.result().info.iter;
     res.warm_piqp_solve_ms = dur_piqp_warm.count();
 
-    // ----------------------------------------------------
     // IPM-ADMM-CG Warm Start
-    // ----------------------------------------------------
     ProximalIPMSolver custom_solver_warm(P, c, A_eq, b_eq_warm, G_ineq, h_ineq);
     custom_solver_warm.set_settings(100, 1e-5, 0.15);
     custom_solver_warm.set_regularization(1e-8, 1e-8, 1e-8);
@@ -350,8 +341,8 @@ int main()
     std::vector<int> M_values = {50, 100, 150, 200, 250, 300, 350, 400, 450, 500};
     std::vector<MassBenchmarkResult> results;
 
-    std::cout << "==========================================================================" << std::endl;
-    std::cout << "  EXTENDED MULTI-AGENT / MASSES SCALING BENCHMARK (M = 50 to 500)" << std::endl;
+    std::cout << "\n\n" << std::endl;
+    std::cout << "  MASSES SCALING BENCHMARK (M = 50 to 500)" << std::endl;
     std::cout << "  Fixed Horizon N = " << N_fixed << " per unit | Variables n up to 50,000" << std::endl;
     std::cout << "==========================================================================" << std::endl;
 
@@ -360,9 +351,8 @@ int main()
     }
 
     std::cout << "\n\n";
-    std::cout << "=================================================================================================================================================" << std::endl;
-    std::cout << "                                                 EXTENDED MASSES BENCHMARK RESULTS TABLE                                                         " << std::endl;
-    std::cout << "=================================================================================================================================================" << std::endl;
+    std::cout << "         EXTENDED MASSES BENCHMARK RESULTS TABLE       " << std::endl;
+    std::cout << "-------------------------------------------------------------------------------------------------------------------------------------------------" << std::endl;
     std::cout << " M   | Vars n | Cold IPM (ms) | Cold OSQP (ms) [Solve] | Cold PIQP (ms) | Warm IPM (ms) | Warm OSQP (ms) | Warm PIQP (ms) " << std::endl;
     std::cout << "-------------------------------------------------------------------------------------------------------------------------------------------------" << std::endl;
 
@@ -387,7 +377,6 @@ int main()
                 << r.warm_osqp_solve_ms << "\t" << r.warm_osqp_iters << "\t"
                 << r.warm_piqp_solve_ms << "\t" << r.warm_piqp_iters << "\n";
     }
-    std::cout << "=================================================================================================================================================" << std::endl;
     outfile.close();
 
     return 0;

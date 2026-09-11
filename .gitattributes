@@ -1,21 +1,17 @@
-﻿# Auto-detect text files and normalize line endings to LF on commit
+﻿
 * text=auto
 
-# C++ Source and headers
 *.cpp text eol=lf
 *.hpp text eol=lf
 *.h   text eol=lf
 *.c   text eol=lf
 
-# CMake & build configuration
 CMakeLists.txt text eol=lf
 *.cmake text eol=lf
 *.in text eol=lf
 
-# Markdown and text documentation
 *.md text eol=lf
 *.txt text eol=lf
 
-# YAML
 *.yml text eol=lf
 *.yaml text eol=lf

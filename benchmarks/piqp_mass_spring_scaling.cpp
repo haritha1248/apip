@@ -28,11 +28,11 @@ PIQPResult run_piqp_mass_spring(int N)
 
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
     std::cout << "  PIQP Mass-Spring MPC Solver Run: Horizon N = " << N << " (Variables: " << n << ")" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
 
-    // 1. Setup P matrix
+    //setup P
     Eigen::SparseMatrix<double> P(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int i = 0; i < N; i++) {
@@ -48,7 +48,6 @@ PIQPResult run_piqp_mass_spring(int N)
 
     Eigen::VectorXd c = Eigen::VectorXd::Zero(n);
 
-    // Dynamics
     Eigen::MatrixXd A_sys(nx, nx);
     A_sys <<  1.0,  0.1,  0.0,  0.0,
              -0.1,  0.95, 0.1,  0.05,
@@ -91,7 +90,7 @@ PIQPResult run_piqp_mass_spring(int N)
     Eigen::VectorXd b_eq = Eigen::VectorXd::Zero(p);
     b_eq.head(nx) = x_init;
 
-    // G matrix
+    //G matrix
     Eigen::SparseMatrix<double> G_ineq(m, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int i = 0; i < N; i++) {
@@ -104,7 +103,7 @@ PIQPResult run_piqp_mass_spring(int N)
 
     Eigen::VectorXd h_ineq = Eigen::VectorXd::Ones(m);
 
-    // PIQP Sparse Solver (Default settings)
+    //PIQP Sparse
     piqp::SparseSolver<double> solver;
     solver.settings().verbose = false;
     solver.settings().compute_timings = true;
@@ -121,12 +120,11 @@ PIQPResult run_piqp_mass_spring(int N)
     res.setup_solve_time_ms = dur_all.count();
     res.internal_time_ms = (solver.result().info.setup_time + solver.result().info.solve_time) * 1000.0;
 
-    std::cout << "PIQP Performance Metrics:" << std::endl;
+    std::cout << "PIQP Performance:" << std::endl;
     std::cout << "  Status          = " << res.status << std::endl;
     std::cout << "  IPM Iterations  = " << res.iters << std::endl;
     std::cout << "  Setup+Solve Time= " << std::fixed << std::setprecision(4) << res.setup_solve_time_ms << " ms" << std::endl;
     std::cout << "  Internal Time   = " << std::fixed << std::setprecision(4) << res.internal_time_ms << " ms" << std::endl;
-    std::cout << "==========================================================" << std::endl;
 
     return res;
 }
@@ -140,7 +138,7 @@ int main()
         results.push_back(run_piqp_mass_spring(N_val));
     }
 
-    std::cout << "\n>>> PIQP SCALING SUMMARY TABLE <<<" << std::endl;
+    std::cout << "\n PIQP Scaling Summary Table" << std::endl;
     std::cout << "----------------------------------------------------------------------------------" << std::endl;
     std::cout << "  N  |  Variables (n)  |  Setup+Solve Time (ms)  |  Internal Time (ms)  |  Iters" << std::endl;
     std::cout << "----------------------------------------------------------------------------------" << std::endl;

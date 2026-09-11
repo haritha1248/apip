@@ -36,11 +36,11 @@ Result run_osqp_mass_spring(int N)
     res.n = n;
     res.m = m;
 
-    std::cout << "\n==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
     std::cout << "  OSQP Mass-Spring MPC Solver Run: Horizon N = " << N << " (Variables: " << n << ")" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
 
-    // 1. Setup P matrix (Diagonal, so strictly upper triangular part is just the diagonal)
+    // setup P
     Eigen::SparseMatrix<double, Eigen::ColMajor, OSQPInt> P(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int i = 0; i < N; i++) {
@@ -56,7 +56,6 @@ Result run_osqp_mass_spring(int N)
 
     Eigen::VectorXd q = Eigen::VectorXd::Zero(n);
 
-    // Dynamics
     Eigen::MatrixXd A_sys(nx, nx);
     A_sys <<  1.0,  0.1,  0.0,  0.0,
              -0.1,  0.95, 0.1,  0.05,
@@ -69,16 +68,14 @@ Result run_osqp_mass_spring(int N)
     Eigen::VectorXd x_init(nx);
     x_init << 1.0, 0.0, -0.5, 0.0;
 
-    // Build full A matrix (m x n) combining equality dynamics and input bounds
+    //full A matrix
     Eigen::SparseMatrix<double, Eigen::ColMajor, OSQPInt> A(m, n);
     std::vector<Eigen::Triplet<double>> A_triplets;
 
-    // Stage 0 equality: x_0 = x_init
     for (int r = 0; r < nx; r++) {
         A_triplets.push_back(Eigen::Triplet<double>(r, r, 1.0));
     }
 
-    // Stage k dynamics equality: x_k - A_sys*x_{k-1} - B_sys*u_{k-1} = 0
     for (int k = 1; k < N; k++) {
         int row_offset = k * nx;
         int col_prev = (k - 1) * (nx + nu);
@@ -97,7 +94,7 @@ Result run_osqp_mass_spring(int N)
         }
     }
 
-    // Input bounds: -1 <= u_i <= 1
+    //input bounds
     for (int i = 0; i < N; i++) {
         int row = p + i;
         int col_u = i * (nx + nu) + nx;
@@ -107,7 +104,6 @@ Result run_osqp_mass_spring(int N)
     A.setFromTriplets(A_triplets.begin(), A_triplets.end());
     A.makeCompressed();
 
-    // Bounds l and u
     Eigen::VectorXd l(m);
     Eigen::VectorXd u(m);
 
@@ -119,10 +115,8 @@ Result run_osqp_mass_spring(int N)
     l.tail(m_ineq).setConstant(-1.0);
     u.tail(m_ineq).setConstant(1.0);
 
-    // ----------------------------------------------------
     // COLD START RUN
-    // ----------------------------------------------------
-    std::cout << "\n>>> COLD START (Horizon N = " << N << ") <<<" << std::endl;
+    std::cout << "\n COLD START (Horizon N = " << N << ")" << std::endl;
     
     OSQPSettings* settings = (OSQPSettings*)malloc(sizeof(OSQPSettings));
     osqp_set_default_settings(settings);
@@ -162,16 +156,14 @@ Result run_osqp_mass_spring(int N)
     std::cout << "  Solve Time      = " << std::fixed << std::setprecision(4) << res.cold_solve_ms << " ms" << std::endl;
     std::cout << "  Setup+Solve Time= " << std::fixed << std::setprecision(4) << res.cold_total_ms << " ms" << std::endl;
 
-    // Save primal and dual solution for warm start
+    //save primal and dual solution for warm start
     std::vector<double> x_sol(n);
     std::vector<double> y_sol(m);
     for (int i = 0; i < n; i++) x_sol[i] = solver->solution->x[i];
     for (int i = 0; i < m; i++) y_sol[i] = solver->solution->y[i];
 
-    // ----------------------------------------------------
     // WARM START RUN
-    // ----------------------------------------------------
-    std::cout << "\n>>> WARM START (Horizon N = " << N << ") <<<" << std::endl;
+    std::cout << "\n WARM START (Horizon N = " << N << ")" << std::endl;
     
     Eigen::VectorXd x_init2(nx);
     x_init2 << 0.9, 0.0, -0.45, 0.0;
@@ -222,7 +214,7 @@ int main()
         results.push_back(run_osqp_mass_spring(N_val));
     }
 
-    std::cout << "\n>>> OSQP SCALING SUMMARY TABLE <<<" << std::endl;
+    std::cout << "\n OSQP Scaling Summary Table" << std::endl;
     std::cout << "-----------------------------------------------------------------------------------------------" << std::endl;
     std::cout << "  N   | Variables (n) | Cold Iters | Cold Setup (ms) | Cold Solve (ms) | Warm Iters | Warm Solve (ms)" << std::endl;
     std::cout << "-----------------------------------------------------------------------------------------------" << std::endl;

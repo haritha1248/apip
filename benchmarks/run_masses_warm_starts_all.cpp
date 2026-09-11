@@ -16,31 +16,30 @@
 using namespace ipm_admm_cg;
 
 struct MassWarmSolverResult {
-    int M; // Number of agents / units in platoon
-    int nx; // State dimension per agent block
-    int nu; // Control dimension per agent block
-    int N;  // Prediction steps
-    int n;  // Total decision variables = (nx + nu) * M * N
+    int M; //masses
+    int nx; //state dimension 
+    int nu; //control dimension
+    int N; 
+    int n;  // decison variables
 
-    // IPM-ADMM-CG Warm Start
+    //IPM-ADMM-CG Warm Start
     int custom_ipm_iters;
     int custom_cg_iters;
     double custom_time_ms;
     bool custom_success;
 
-    // OSQP Warm Start
+    //OSQP Warm Start
     int osqp_iters;
     double osqp_solve_ms;
     bool osqp_success;
 
-    // PIQP Warm Start
+    //PIQP Warm Start
     int piqp_iters;
     double piqp_solve_ms;
     bool piqp_success;
 };
 
-// Scalable Multi-Agent Platoon MPC Problem Formulation
-// Maintains constant stage sub-block size B = nx_agent + nu_agent = 5
+//stage sub-block size B = nx_agent + nu_agent = 5
 void build_multi_agent_platoon_problem_warm(int M, int N,
                                              const Eigen::VectorXd& x_init,
                                              Eigen::SparseMatrix<double>& P,
@@ -51,8 +50,8 @@ void build_multi_agent_platoon_problem_warm(int M, int N,
                                              Eigen::VectorXd& h_ineq,
                                              int& nx_out, int& nu_out)
 {
-    int nx_agent = 4; // [position, velocity, acceleration, headway_error]
-    int nu_agent = 1; // [jerk / thrust force]
+    int nx_agent = 4;
+    int nu_agent = 1; 
     nx_out = nx_agent;
     nu_out = nu_agent;
 
@@ -62,7 +61,6 @@ void build_multi_agent_platoon_problem_warm(int M, int N,
     int p = nx_agent * num_blocks;         // Total equality constraints
     int m_ineq = 2 * nu_agent * num_blocks;// Total inequality constraints
 
-    // 1. Agent Continuous & Discrete-Time System Dynamics (dt = 0.1s)
     double dt = 0.1;
     Eigen::MatrixXd A_sys(nx_agent, nx_agent);
     A_sys << 1.0,  dt, 0.5 * dt * dt, 0.0,
@@ -73,7 +71,7 @@ void build_multi_agent_platoon_problem_warm(int M, int N,
     Eigen::VectorXd B_sys(nx_agent);
     B_sys << 0.0, 0.0, dt, 0.0;
 
-    // 2. Build QP Cost Matrix P (Stage block size B = 5)
+    //Build QP Cost Matrix P (Stage block size B = 5)
     P.resize(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int b = 0; b < num_blocks; b++) {
@@ -89,7 +87,7 @@ void build_multi_agent_platoon_problem_warm(int M, int N,
 
     c = Eigen::VectorXd::Zero(n);
 
-    // 3. Build Equality Dynamics Matrix A_eq * x = b_eq
+    //Build Equality Dynamics Matrix A_eq * x = b_eq
     A_eq.resize(p, n);
     std::vector<Eigen::Triplet<double>> A_triplets;
     b_eq = Eigen::VectorXd::Zero(p);
@@ -99,7 +97,6 @@ void build_multi_agent_platoon_problem_warm(int M, int N,
         int col_curr = b * block_size;
         int col_prev = (b - 1) * block_size;
 
-        // Identity for x_k
         for (int r = 0; r < nx_agent; r++) {
             A_triplets.push_back(Eigen::Triplet<double>(row_offset + r, col_curr + r, 1.0));
         }
@@ -124,7 +121,7 @@ void build_multi_agent_platoon_problem_warm(int M, int N,
     A_eq.setFromTriplets(A_triplets.begin(), A_triplets.end());
     A_eq.makeCompressed();
 
-    // 4. Build Inequality Constraints G_ineq * x <= h_ineq (-1.0 <= u <= 1.0)
+    //Build Inequality Constraints G_ineq * x <= h_ineq 
     G_ineq.resize(m_ineq, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int b = 0; b < num_blocks; b++) {
@@ -153,7 +150,7 @@ MassWarmSolverResult run_mass_warm_benchmark(int M, int N)
     x_init1 << 1.0, 0.2, -0.1, 0.5;
 
     Eigen::VectorXd x_init2(4);
-    x_init2 << 0.9, 0.15, -0.05, 0.45; // Perturbed initial state for warm start
+    x_init2 << 0.9, 0.15, -0.05, 0.45; //warm start
 
     build_multi_agent_platoon_problem_warm(M, N, x_init1, P, c, A_eq, b_eq1, G_ineq, h_ineq, nx, nu);
     b_eq2 = b_eq1;
@@ -172,21 +169,19 @@ MassWarmSolverResult run_mass_warm_benchmark(int M, int N)
     res.N = N;
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
-    std::cout << "  WARM START BENCHMARK: Platoon Units M = " << M
+    std::cout << "\n" << std::endl;
+    std::cout << "Warm Start Benchmark: M = " << M
               << " (Horizon N = " << N << ", Vars n = " << n << ", Block B = " << block_size << ")" << std::endl;
-    std::cout << "==========================================================" << std::endl;
-
-    // ----------------------------------------------------
-    // 1. IPM-ADMM-CG Warm Start
-    // ----------------------------------------------------
-    std::cout << "--> Running IPM-ADMM-CG Warm Start..." << std::endl;
+    std::cout << "----------------------------------------------------------" << std::endl;
+   
+    //IPM-ADMM-CG Warm Start
+    std::cout << "Running IPM-ADMM-CG Warm Start\n" << std::endl;
     Eigen::VectorXd x_sol = Eigen::VectorXd::Zero(n);
     Eigen::VectorXd s_sol = Eigen::VectorXd::Ones(m_ineq);
     Eigen::VectorXd y_sol = Eigen::VectorXd::Zero(p);
     Eigen::VectorXd z_sol = Eigen::VectorXd::Ones(m_ineq);
 
-    // Initial solve to generate warm start primal-dual state
+    //initial solve
     ProximalIPMSolver custom_solver1(P, c, A_eq, b_eq1, G_ineq, h_ineq);
     custom_solver1.set_settings(100, 1e-5, 0.15);
     custom_solver1.set_regularization(1e-8, 1e-8, 1e-8);
@@ -194,7 +189,7 @@ MassWarmSolverResult run_mass_warm_benchmark(int M, int N)
     int dump_admm = 0, dump_cg = 0;
     custom_solver1.solve(x_sol, s_sol, y_sol, z_sol, dump_admm, dump_cg, false, false);
 
-    // Warm start solve with updated RHS b_eq2
+    //warm start solve
     ProximalIPMSolver custom_solver_warm(P, c, A_eq, b_eq2, G_ineq, h_ineq);
     custom_solver_warm.set_settings(100, 1e-5, 0.15);
     custom_solver_warm.set_regularization(1e-8, 1e-8, 1e-8);
@@ -212,10 +207,8 @@ MassWarmSolverResult run_mass_warm_benchmark(int M, int N)
     res.custom_time_ms = dur_custom.count();
     std::cout << "    [IPM-ADMM-CG Warm] Time: " << res.custom_time_ms << " ms | IPM Iters: " << warm_admm << " | CG Iters: " << warm_cg << std::endl;
 
-    // ----------------------------------------------------
-    // 2. OSQP Warm Start
-    // ----------------------------------------------------
-    std::cout << "--> Running OSQP Warm Start..." << std::endl;
+    //OSQP Warm Start
+    std::cout << "Running OSQP Warm Start\n" << std::endl;
     int osqp_num_ineq = nu * num_blocks;
     int m_osqp = p + osqp_num_ineq;
 
@@ -292,10 +285,8 @@ MassWarmSolverResult run_mass_warm_benchmark(int M, int N)
     OSQPCscMatrix_free(A_csc);
     free(settings);
 
-    // ----------------------------------------------------
-    // 3. PIQP Warm Start
-    // ----------------------------------------------------
-    std::cout << "--> Running PIQP Warm Start..." << std::endl;
+    //PIQP Warm Start
+    std::cout << "Running PIQP Warm Start\n" << std::endl;
     piqp::SparseSolver<double> piqp_solver;
     piqp_solver.settings().verbose = false;
     piqp_solver.settings().compute_timings = true;
@@ -324,20 +315,19 @@ int main()
     std::vector<int> M_values = {2, 5, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150};
     std::vector<MassWarmSolverResult> results;
 
-    std::cout << "==========================================================" << std::endl;
-    std::cout << "  MULTI-AGENT PLATOON MPC SCALING BENCHMARK (WARM STARTS)" << std::endl;
-    std::cout << "  Fixed Horizon N = " << N_fixed << " per unit" << std::endl;
-    std::cout << "  Solvers: IPM-ADMM-CG, OSQP, PIQP (Warm Starts)" << std::endl;
-    std::cout << "  Platoon Units M: 2 to 150 (Variables n up to 15,000)" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
+    std::cout << "MPC Scaling Benchmarks (Warm Starts)\n" << std::endl;
+    std::cout << " Fixed Horizon N = " << N_fixed << " per unit" << std::endl;
+    std::cout << " Solvers: IPM-ADMM-CG, OSQP, PIQP (Warm Starts)" << std::endl;
+    std::cout << "  M: 2 to 150 (Variables n up to 15,000)" << std::endl;
+    std::cout << "\n" << std::endl;
 
     for (int M_val : M_values) {
         results.push_back(run_mass_warm_benchmark(M_val, N_fixed));
     }
 
     std::cout << "\n\n";
-    std::cout << "=========================================================================================" << std::endl;
-    std::cout << "               MULTI-AGENT SCALING BENCHMARK SUMMARY (WARM START)                        " << std::endl;
+    std::cout << "               MPC Scaling Benchmarks Summary (Warm Starts)                        " << std::endl;
     std::cout << "=========================================================================================" << std::endl;
     std::cout << " M   | nx | nu | Vars (n) | IPM-ADMM-CG (ms) | IPM Iters | OSQP Solve (ms) | OSQP Iters | PIQP Solve (ms) | PIQP Iters " << std::endl;
     std::cout << "-----------------------------------------------------------------------------------------";

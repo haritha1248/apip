@@ -1,39 +1,25 @@
-﻿# Prerequisites
+﻿
 *.d
-
-# Compiled Object files
 *.slo
 *.lo
 *.o
 *.obj
-
-# Precompiled Headers
 *.gch
 *.pch
-
-# Compiled Dynamic libraries
 *.so
 *.dylib
 *.dll
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
-
-# Executables
 *.exe
 *.out
 *.app
-
-# Build directories
 [Bb]uild/
 [Bb]in/
 [Oo]ut/
 cmake-build-*/
-
-# CMake artifacts
 CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
@@ -44,8 +30,6 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 _deps/
-
-# Visual Studio / MSVC
 .vs/
 *.sln
 *.slnx
@@ -60,21 +44,15 @@ _deps/
 *.pdb
 *.ilk
 *.exp
-
-# VS Code & JetBrains
 .vscode/
 .idea/
 *.swp
 *~
-
-# Test & Benchmark Output Dumps
 *.log
 output*.txt
 *_results.txt
 *_output*.txt
 scaling_output*.txt
 run_output*.txt
-
-# OS generated files
 .DS_Store
 Thumbs.db

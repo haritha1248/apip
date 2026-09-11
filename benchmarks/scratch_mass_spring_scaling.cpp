@@ -30,11 +30,11 @@ void run_verbose_mass_spring(int N, CustomResult& res)
     res.N = N;
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
-    std::cout << "  Custom Solver Mass-Spring MPC Run: Horizon N = " << N << " (Variables: " << n << ")" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\n" << std::endl;
+    std::cout << "IPM-ADMM-CG Mass-Spring MPC Run: Horizon N = " << N << " (Variables: " << n << ")" << std::endl;
+    std::cout << "\n" << std::endl;
 
-    // 1. Setup P matrix
+    //setup P
     Eigen::SparseMatrix<double> P(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int i = 0; i < N; i++) {
@@ -50,7 +50,6 @@ void run_verbose_mass_spring(int N, CustomResult& res)
 
     Eigen::VectorXd c = Eigen::VectorXd::Zero(n);
 
-    // Dynamics
     Eigen::MatrixXd A_sys(nx, nx);
     A_sys <<  1.0,  0.1,  0.0,  0.0,
              -0.1,  0.95, 0.1,  0.05,
@@ -93,7 +92,7 @@ void run_verbose_mass_spring(int N, CustomResult& res)
     Eigen::VectorXd b_eq1 = Eigen::VectorXd::Zero(p);
     b_eq1.head(nx) = x_init;
 
-    // G matrix
+    //setup G
     Eigen::SparseMatrix<double> G_ineq(m, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int i = 0; i < N; i++) {
@@ -106,16 +105,14 @@ void run_verbose_mass_spring(int N, CustomResult& res)
 
     Eigen::VectorXd h_ineq = Eigen::VectorXd::Ones(m);
 
-    // Outputs for Solver
+    //outputs
     Eigen::VectorXd x_sol = Eigen::VectorXd::Zero(n);
     Eigen::VectorXd s_sol = Eigen::VectorXd::Ones(m);
     Eigen::VectorXd y_sol = Eigen::VectorXd::Zero(p);
     Eigen::VectorXd z_sol = Eigen::VectorXd::Ones(m);
 
-    // ----------------------------------------------------
     // COLD START RUN
-    // ----------------------------------------------------
-    std::cout << "\n>>> COLD START (Horizon N = " << N << ") <<<" << std::endl;
+    std::cout << "\n Cold Start (Horizon N = " << N << ")" << std::endl;
     ProximalIPMSolver solver_cold(P, c, A_eq, b_eq1, G_ineq, h_ineq);
     solver_cold.set_settings(100, 1e-5, 0.15);
     solver_cold.set_regularization(1e-8, 1e-8, 1e-8);
@@ -132,16 +129,14 @@ void run_verbose_mass_spring(int N, CustomResult& res)
     res.cold_cg = cold_cg;
     res.cold_time_ms = dur_cold.count();
 
-    std::cout << "Cold Start Performance Metrics:" << std::endl;
-    std::cout << "  Status          = " << (success_cold ? "SOLVED" : "FAILED") << std::endl;
-    std::cout << "  IPM Iterations  = " << cold_admm << std::endl;
-    std::cout << "  CG Iterations   = " << cold_cg << std::endl;
-    std::cout << "  Solve Time      = " << std::fixed << std::setprecision(4) << dur_cold.count() << " ms" << std::endl;
+    std::cout << "Cold Start Performance:" << std::endl;
+    std::cout << " Status          = " << (success_cold ? "SOLVED" : "FAILED") << std::endl;
+    std::cout << " IPM Iterations  = " << cold_admm << std::endl;
+    std::cout << " CG Iterations   = " << cold_cg << std::endl;
+    std::cout << " Solve Time      = " << std::fixed << std::setprecision(4) << dur_cold.count() << " ms" << std::endl;
 
-    // ----------------------------------------------------
     // WARM START RUN
-    // ----------------------------------------------------
-    std::cout << "\n>>> WARM START (Horizon N = " << N << ") <<<" << std::endl;
+    std::cout << "\n Warm Start (Horizon N = " << N << ") " << std::endl;
     Eigen::VectorXd b_eq2 = b_eq1;
     Eigen::VectorXd x_init2(nx);
     x_init2 << 0.9, 0.0, -0.45, 0.0;
@@ -163,12 +158,12 @@ void run_verbose_mass_spring(int N, CustomResult& res)
     res.warm_cg = warm_cg;
     res.warm_time_ms = dur_warm.count();
 
-    std::cout << "Warm Start Performance Metrics:" << std::endl;
-    std::cout << "  Status          = " << (success_warm ? "SOLVED" : "FAILED") << std::endl;
-    std::cout << "  IPM Iterations  = " << warm_admm << std::endl;
-    std::cout << "  CG Iterations   = " << warm_cg << std::endl;
-    std::cout << "  Solve Time      = " << std::fixed << std::setprecision(4) << dur_warm.count() << " ms" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "Warm Start Performance:" << std::endl;
+    std::cout << " Status          = " << (success_warm ? "SOLVED" : "FAILED") << std::endl;
+    std::cout << " IPM Iterations  = " << warm_admm << std::endl;
+    std::cout << " CG Iterations   = " << warm_cg << std::endl;
+    std::cout << " Solve Time      = " << std::fixed << std::setprecision(4) << dur_warm.count() << " ms" << std::endl;
+    std::cout << "\n" << std::endl;
 }
 
 int main()
@@ -181,8 +176,7 @@ int main()
         results.push_back(r);
     }
 
-    std::cout << "\n>>> OPTIMIZED CUSTOM SOLVER SCALING SUMMARY TABLE <<<" << std::endl;
-    std::cout << "-----------------------------------------------------------------------------------------------" << std::endl;
+    std::cout << "\nSCALING SUMMARY TABLE " << std::endl;
     std::cout << "  N   | Variables (n) | Cold Iters | Cold CG | Cold Time (ms) | Warm Iters | Warm CG | Warm Time (ms)" << std::endl;
     std::cout << "-----------------------------------------------------------------------------------------------" << std::endl;
     for (const auto& r : results) {

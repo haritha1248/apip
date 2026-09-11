@@ -39,16 +39,15 @@ struct SolverResult {
     bool piqp_success;
 };
 
-// Computes exact ZOH discrete dynamics for classic Wang-Boyd 6-mass, 7-spring, 3-actuator system
+//6-mass, 7-spring, 3-actuator example
 void compute_wang_boyd_discrete_matrices(double dt,
                                          Eigen::MatrixXd& A_sys,
                                          Eigen::MatrixXd& B_sys)
 {
     const int n_masses = 6;
-    const int nx = 2 * n_masses; // 12 states: [p1, v1, p2, v2, p3, v3, p4, v4, p5, v5, p6, v6]
-    const int nu = 3;            // 3 tension actuators
+    const int nx = 2 * n_masses; // 12 states
+    const int nu = 3;            // 3 actuators
 
-    // Stiffness matrix K (6x6 tridiagonal: 6 unit masses connected by 7 unit springs between fixed walls)
     Eigen::MatrixXd K = Eigen::MatrixXd::Zero(n_masses, n_masses);
     for (int i = 0; i < n_masses; i++) {
         K(i, i) = 2.0;
@@ -56,20 +55,16 @@ void compute_wang_boyd_discrete_matrices(double dt,
         if (i < n_masses - 1) K(i, i + 1) = -1.0;
     }
 
-    // Damping matrix D
+    //damping
     double damping = 0.1;
     Eigen::MatrixXd D = damping * Eigen::MatrixXd::Identity(n_masses, n_masses);
 
-    // Actuator placement matrix B_u (6x3): tension forces acting across pairs of masses
-    // u1 acts between masses 1 and 2 (+u1 on mass 1, -u1 on mass 2)
-    // u2 acts between masses 3 and 4 (+u2 on mass 3, -u2 on mass 4)
-    // u3 acts between masses 5 and 6 (+u3 on mass 5, -u3 on mass 6)
+    //tension forces acting between masses
     Eigen::MatrixXd B_u = Eigen::MatrixXd::Zero(n_masses, nu);
     B_u(0, 0) =  1.0; B_u(1, 0) = -1.0;
     B_u(2, 1) =  1.0; B_u(3, 1) = -1.0;
     B_u(4, 2) =  1.0; B_u(5, 2) = -1.0;
 
-    // Continuous state matrix A_c and B_c for interleaved states [p1, v1, p2, v2, ...]
     Eigen::MatrixXd A_c = Eigen::MatrixXd::Zero(nx, nx);
     Eigen::MatrixXd B_c = Eigen::MatrixXd::Zero(nx, nu);
 
@@ -77,10 +72,8 @@ void compute_wang_boyd_discrete_matrices(double dt,
         int pos_idx = 2 * i;
         int vel_idx = 2 * i + 1;
 
-        // dp_i / dt = v_i
         A_c(pos_idx, vel_idx) = 1.0;
 
-        // dv_i / dt = sum_j (-K_ij * p_j - D_ij * v_j) + sum_k B_u_ik * u_k
         for (int j = 0; j < n_masses; j++) {
             A_c(vel_idx, 2 * j) += -K(i, j);
             A_c(vel_idx, 2 * j + 1) += -D(i, j);
@@ -91,11 +84,6 @@ void compute_wang_boyd_discrete_matrices(double dt,
         }
     }
 
-    // Exact Van Loan matrix exponential discretization:
-    // M = [ A_c   B_c ] * dt
-    //     [  0     0  ]
-    // exp(M) = [ A_sys  B_sys ]
-    //          [   0      I   ]
     Eigen::MatrixXd M = Eigen::MatrixXd::Zero(nx + nu, nx + nu);
     M.block(0, 0, nx, nx) = A_c * dt;
     M.block(0, nx, nx, nu) = B_c * dt;
@@ -121,17 +109,15 @@ void build_wang_boyd_mass_spring_problem(int N,
     const int p = nx * N;
     const int m = 2 * nu * N;
 
-    // 1. Cost Matrix P (Stage block size B = nx + nu = 15)
+    //P matrix
     P.resize(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int i = 0; i < N; i++) {
         int start = (nx + nu) * i;
-        // Position weights = 10.0, velocity weights = 1.0
         for (int mass = 0; mass < 6; mass++) {
             P_triplets.push_back(Eigen::Triplet<double>(start + 2 * mass + 0, start + 2 * mass + 0, 10.0));
             P_triplets.push_back(Eigen::Triplet<double>(start + 2 * mass + 1, start + 2 * mass + 1, 1.0));
         }
-        // Control effort weights = 0.1
         for (int u = 0; u < nu; u++) {
             P_triplets.push_back(Eigen::Triplet<double>(start + nx + u, start + nx + u, 0.1));
         }
@@ -141,11 +127,10 @@ void build_wang_boyd_mass_spring_problem(int N,
 
     c = Eigen::VectorXd::Zero(n);
 
-    // Initial state: alternating displacements, zero velocities
     Eigen::VectorXd x_init(nx);
     x_init << 1.0, 0.0, -0.5, 0.0, 0.5, 0.0, -0.2, 0.0, 0.3, 0.0, -0.1, 0.0;
 
-    // 2. Equality Matrix A_eq: Dynamics x_{k+1} = A_sys * x_k + B_sys * u_k
+    //A_eq matrix
     A_eq.resize(p, n);
     std::vector<Eigen::Triplet<double>> A_triplets;
     for (int r = 0; r < nx; r++) {
@@ -176,7 +161,7 @@ void build_wang_boyd_mass_spring_problem(int N,
     b_eq = Eigen::VectorXd::Zero(p);
     b_eq.head(nx) = x_init;
 
-    // 3. Inequality Matrix G_ineq: -u_max <= u_k <= u_max (u_max = 0.5)
+    //G_ineq matrix
     G_ineq.resize(m, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int i = 0; i < N; i++) {
@@ -209,10 +194,9 @@ SolverResult run_benchmark_for_N(int N,
     res.N = N;
     res.n = n;
 
-    std::cout << "\n==========================================================" << std::endl;
-    std::cout << "  RUNNING COLD START BENCHMARK: Horizon N = " << N << " (Variables n = " << n << ")" << std::endl;
+    std::cout << "\n" << std::endl;
+    std::cout << "  Runing Cold Start Benchmark: Horizon N = " << N << " (Variables n = " << n << ")" << std::endl;
     std::cout << "  Wang-Boyd Classic: 6 Masses, 7 Springs, 3 Actuators" << std::endl;
-    std::cout << "==========================================================" << std::endl;
 
     Eigen::SparseMatrix<double> P;
     Eigen::VectorXd c;
@@ -223,10 +207,8 @@ SolverResult run_benchmark_for_N(int N,
 
     build_wang_boyd_mass_spring_problem(N, A_sys, B_sys, P, c, A_eq, b_eq, G_ineq, h_ineq);
 
-    // ----------------------------------------------------
-    // 1. IPM-ADMM-CG Solver (Cold Start)
-    // ----------------------------------------------------
-    std::cout << "--> Running IPM-ADMM-CG (Cold Start)..." << std::endl;
+    //IPM-ADMM-CG Solver (Cold Start)
+    std::cout << "Running IPM-ADMM-CG (Cold Start)\n" << std::endl;
     Eigen::VectorXd x_sol = Eigen::VectorXd::Zero(n);
     Eigen::VectorXd s_sol = Eigen::VectorXd::Ones(m_g);
     Eigen::VectorXd y_sol = Eigen::VectorXd::Zero(p);
@@ -249,14 +231,12 @@ SolverResult run_benchmark_for_N(int N,
     res.custom_time_ms = dur_custom.count();
     std::cout << "    [IPM-ADMM-CG] Time: " << res.custom_time_ms << " ms | IPM Iters: " << custom_admm << " | CG Iters: " << custom_cg << std::endl;
 
-    // ----------------------------------------------------
-    // 2. OSQP Solver (Cold Start)
-    // ----------------------------------------------------
-    std::cout << "--> Running OSQP (Cold Start)..." << std::endl;
+    //OSQP Solver (Cold Start)
+    std::cout << "Running OSQP (Cold Start)\n" << std::endl;
     int m_ineq = nu * N;
     int m_osqp = p + m_ineq;
 
-    // P upper triangular for OSQP
+    // P upper triangular: OSQP
     std::vector<Eigen::Triplet<double>> P_osqp_triplets;
     for (int i = 0; i < N; i++) {
         int start = (nx + nu) * i;
@@ -272,7 +252,6 @@ SolverResult run_benchmark_for_N(int N,
     P_osqp.setFromTriplets(P_osqp_triplets.begin(), P_osqp_triplets.end());
     P_osqp.makeCompressed();
 
-    // Dynamics + Input bounds for OSQP A matrix
     Eigen::SparseMatrix<double, Eigen::ColMajor, OSQPInt> A_osqp(m_osqp, n);
     std::vector<Eigen::Triplet<double>> A_osqp_triplets;
 
@@ -351,9 +330,7 @@ SolverResult run_benchmark_for_N(int N,
     OSQPCscMatrix_free(A_csc);
     free(settings);
 
-    // ----------------------------------------------------
-    // 3. PIQP Solver (Cold Start)
-    // ----------------------------------------------------
+    //PIQP Solver (Cold Start)
     std::cout << "--> Running PIQP (Cold Start)..." << std::endl;
     piqp::SparseSolver<double> piqp_solver;
     piqp_solver.settings().verbose = false;
@@ -375,14 +352,12 @@ SolverResult run_benchmark_for_N(int N,
 
 int main()
 {
-    std::cout << "Computing continuous-to-discrete system matrices for Wang-Boyd benchmark (dt = 0.5s)..." << std::endl;
     Eigen::MatrixXd A_sys, B_sys;
     compute_wang_boyd_discrete_matrices(0.5, A_sys, B_sys);
 
     std::vector<int> N_values = {1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000};
     std::vector<SolverResult> results;
 
-    std::cout << "==========================================================" << std::endl;
     std::cout << "  WANG-BOYD 6-MASS 7-SPRING MPC BENCHMARK: COLD STARTS" << std::endl;
     std::cout << "  Solvers: IPM-ADMM-CG, OSQP, PIQP" << std::endl;
     std::cout << "  Horizons N: 1000 to 10000" << std::endl;
@@ -393,8 +368,7 @@ int main()
     }
 
     std::cout << "\n\n";
-    std::cout << "========================================================================================================================" << std::endl;
-    std::cout << "                                  WANG-BOYD COLD-START COMPARISON SUMMARY TABLE                                        " << std::endl;
+    std::cout << " WANG-BOYD COLD-START COMPARISON SUMMARY TABLE\n " << std::endl;
     std::cout << "========================================================================================================================" << std::endl;
     std::cout << "  N   | Variables (n) | IPM-ADMM-CG (ms) | IPM-ADMM Iters | OSQP Total (ms) | OSQP Solve (ms) | OSQP Iters | PIQP Time (ms) | PIQP Iters " << std::endl;
     std::cout << "------------------------------------------------------------------------------------------------------------------------" << std::endl;

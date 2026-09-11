@@ -9,14 +9,13 @@
 
 using namespace ipm_admm_cg;
 
-// Saved state for warm-starting Example 4 across multiple calls
 static Eigen::VectorXd prev_x_4;
 static Eigen::VectorXd prev_s_4;
 static Eigen::VectorXd prev_y_4;
 static Eigen::VectorXd prev_z_4;
 static bool has_prev_4 = false;
 
-// Computes exact ZOH discrete dynamics for Wang-Boyd 6-mass, 7-spring, 3-actuator system
+//computes 6-mass, 7-spring, 3-actuator example
 static void compute_wang_boyd_matrices(double dt, Eigen::MatrixXd& A_sys, Eigen::MatrixXd& B_sys)
 {
     const int n_masses = 6;
@@ -64,7 +63,7 @@ static void compute_wang_boyd_matrices(double dt, Eigen::MatrixXd& A_sys, Eigen:
     B_sys = expM.block(0, nx, nx, nu);
 }
 
-// Helper function to setup and run the Wang-Boyd Mass-Spring MPC problem for horizon N
+//shift for horizon N
 void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& total_cg_iters)
 {
     const int nx = 12;
@@ -76,7 +75,7 @@ void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& t
     Eigen::MatrixXd A_sys, B_sys;
     compute_wang_boyd_matrices(0.5, A_sys, B_sys);
 
-    // Setup P matrix
+    //setup P
     Eigen::SparseMatrix<double> P(n, n);
     std::vector<Eigen::Triplet<double>> P_triplets;
     for (int i = 0; i < N; i++) {
@@ -94,7 +93,6 @@ void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& t
 
     Eigen::VectorXd c = Eigen::VectorXd::Zero(n);
 
-    // Initial state
     Eigen::VectorXd x_init(nx);
     x_init << 1.0, 0.0, -0.5, 0.0, 0.5, 0.0, -0.2, 0.0, 0.3, 0.0, -0.1, 0.0;
 
@@ -130,7 +128,6 @@ void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& t
     Eigen::VectorXd b_eq = Eigen::VectorXd::Zero(p);
     b_eq.head(nx) = x_init;
 
-    // G matrix: actuator bounds |u| <= 0.5
     Eigen::SparseMatrix<double> G_ineq(m, n);
     std::vector<Eigen::Triplet<double>> G_triplets;
     for (int i = 0; i < N; i++) {
@@ -147,7 +144,7 @@ void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& t
 
     Eigen::VectorXd h_ineq = Eigen::VectorXd::Constant(m, 0.5);
 
-    // 1. Solve first problem with Custom Solver (cold start) to get warm start point
+    //solve cold 
     ProximalIPMSolver solver(P, c, A_eq, b_eq, G_ineq, h_ineq);
     solver.set_settings(100, 1e-5, 0.15);
     solver.set_regularization(1e-8, 1e-8, 1e-8);
@@ -164,7 +161,7 @@ void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& t
     int dummy_it = 0, dummy_cg = 0;
     solver.solve(x_sol, s_sol, y_sol, z_sol, dummy_it, dummy_cg, false, false);
 
-    // 2. Setup second problem with shifted initial state
+    //shift init state
     Eigen::VectorXd b_eq2 = b_eq;
     Eigen::VectorXd x_init2 = 0.9 * x_init;
     b_eq2.head(nx) = x_init2;
@@ -190,11 +187,9 @@ void run_mass_spring_for_N(int N, double& custom_time, int& custom_iters, int& t
 
 void example4(bool warm_start = false)
 {
-    std::cout << "==========================================================" << std::endl;
-    std::cout << "              Proximal IPM ADMM-CG QP Solver              " << std::endl;
-    std::cout << "                        Example 4                         " << std::endl;
-    std::cout << "        (Classic 6-Mass 7-Spring 3-Actuator MPC)          " << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << "\nProximal IPM ADMM-CG QP Solver\n" << std::endl;
+    std::cout << "Example 4\n" << std::endl;
+    std::cout << "(6-Mass 7-Spring 3-Actuator MPC)\n" << std::endl;
 
     const int N = 20;
     const int nx = 12;
@@ -204,10 +199,10 @@ void example4(bool warm_start = false)
     const int m = 2 * nu * N;
 
     std::cout << "Problem Dimensions:" << std::endl;
-    std::cout << "  Horizon Steps (N)      = " << N << std::endl;
-    std::cout << "  Variables (n)          = " << n << std::endl;
-    std::cout << "  Equalities (p)         = " << p << std::endl;
-    std::cout << "  Inequalities (m)       = " << m << std::endl;
+    std::cout << " Horizon Steps (N) = " << N << std::endl;
+    std::cout << " Variables (n)     = " << n << std::endl;
+    std::cout << " Equalities (p)    = " << p << std::endl;
+    std::cout << " Inequalities (m)  = " << m << std::endl;
 
     Eigen::MatrixXd A_sys, B_sys;
     compute_wang_boyd_matrices(0.5, A_sys, B_sys);
@@ -311,7 +306,7 @@ void example4(bool warm_start = false)
     int total_admm_iters = 0;
     int total_cg_iters = 0;
 
-    std::cout << "\nRunning custom IPM-ADMM-CG solver..." << std::endl;
+    std::cout << "\nRunning IPM-ADMM-CG solver..." << std::endl;
     auto start_time = std::chrono::high_resolution_clock::now();
     bool status = solver.solve(x_sol, s_sol, y_sol, z_sol, total_admm_iters, total_cg_iters, actual_warm, false);
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -324,22 +319,19 @@ void example4(bool warm_start = false)
     has_prev_4 = true;
 
     if (status) {
-        std::cout << "Solver succeeded!" << std::endl;
+        std::cout << "Solver succeeded." << std::endl;
     } else {
-        std::cout << "Solver failed!" << std::endl;
+        std::cout << "Solver failed." << std::endl;
     }
 
-    std::cout << "\n==========================================================" << std::endl;
     std::cout << "Performance Metrics (IPM-ADMM-CG):" << std::endl;
-    std::cout << "  Total Inner ADMM Iterations = " << total_admm_iters << std::endl;
-    std::cout << "  Total Inner CG Iterations   = " << total_cg_iters << std::endl;
-    std::cout << "  Solve Execution Time        = " << duration.count() << " ms" << std::endl;
-    std::cout << "==========================================================" << std::endl;
+    std::cout << " Total Inner ADMM Iterations = " << total_admm_iters << std::endl;
+    std::cout << " Total Inner CG Iterations   = " << total_cg_iters << std::endl;
+    std::cout << " Solve Execution Time        = " << duration.count() << " ms" << std::endl;
 
     if (warm_start)
     {
-        std::cout << "\n>>> SCALING TEST: SOLVER PERFORMANCE VS. HORIZON LENGTH (N) <<<" << std::endl;
-        std::cout << "--------------------------------------------------------------" << std::endl;
+        std::cout << "\n SCALING TEST: SOLVER PERFORMANCE VS. HORIZON LENGTH (N) " << std::endl;
         std::cout << "  N   | Variables (n) | Custom Time (ms) | Inner CG Iters " << std::endl;
         std::cout << "--------------------------------------------------------------" << std::endl;
 
