@@ -5,11 +5,15 @@ It combines the Proximal Interior Point and an ADMM operator splitting inner sol
 
 ## Key Features
 
-Header only and Dependency Free: Depends only on standard C++17 and Eigen 3.4+.
-Block Thomas Preconditioning: Exploits tridiagonal and banded structure of MPC problems for $O(N)$ linear scaling per iterative loop.
-Zero Dynamic Allocations: All vectors, Cholesky factorization buffers, and sparse matrices are preallocated.
-Interior Shifted Warm Starting: dual/slack variables are interior projected to prevent boundary sticking.
-Built In FLOP count: explicity counts FLOPs per solve.
+Header only and Dependency Free: Depends only on standard C++17 and Eigen 3.4+.  
+
+Block Thomas Preconditioning: Exploits tridiagonal and banded structure of MPC problems for $O(N)$ linear scaling per iterative loop. 
+
+Zero Dynamic Allocations: All vectors, Cholesky factorization buffers, and sparse matrices are preallocated. 
+
+Interior Shifted Warm Starting: dual/slack variables are interior projected to prevent boundary sticking. 
+
+Built In FLOP count: explicity counts FLOPs per solve. 
 
 ## Mathematical Formulation
 
@@ -23,22 +27,20 @@ $$\begin {aligned}
 
 The solver uses the Proximal Interior Point framework to structure the problem as a modified Lagrangian equation:
 
-$$\begin{align}\label{eq:aug_lagrangian}
-\mathcal{L}_{\delta}(x, s, \lambda, \nu) &= \frac{1}{2} x^T P x + q^T x 
-+ &\lambda^T (Ex - e) + \frac{1}{2\delta} \| Ex - e \|_2^2 
-+ &\nu^T (Gx - h + s) + \frac{1}{2\delta} \| Gx - h + s \|_2^2,
+$$\begin{align}
+\mathcal{L}_{\delta}(x, s, \lambda, \nu) &= \frac{1}{2} x^T P x + q^T x + \lambda^T (Ex - e) + \frac{1}{2\delta} \| Ex - e \|_2^2 + \nu^T (Gx - h + s) + \frac{1}{2\delta} \| Gx - h + s \|_2^2,
 \end{align}$$
 
-Which then uses proximal multipliers and barrier parameters to structure the problem into a KKT structure matrix. We rewrite Newton's equations as one equation by elimination of $\delta s, \delta z, and \delta y $, (slack parameters and y), which yields:
+Which then uses proximal multipliers and barrier parameters to structure the problem into a KKT structure matrix. We rewrite Newton's equations as one equation by elimination of $\delta s, \delta z,$ and $\delta y $, (slack parameters and y), which yields:
 
-$$\begin{align}\label{eq:reducedsystem}
+$$\begin{align}
     \left(P + \rho^k I_n + \frac{1}{\delta^k} E^T E + G^T  \mathcal{W}^{-k}  G \right)  \Delta x = \overline{r}^k
 \end{align}$$
 
-By defining $$\begin{align} \label{eq:coef} \Phi=P + \rho^k I_n + \frac{1}{\delta^k} E^T E + G^T  \mathcal{W}^{-k}  G.
-    \end{align}$$, ADMM operator splitting can be applied to the system $$\Phi \delta x = \overline{r}^k$$. The resulting updates are:
+By defining 
+$$\begin{align} \Phi= P + \rho^k I_n + \frac{1}{\delta^k} E^T E + G^T \mathcal{W}^{-k} G. \end{align}$$, ADMM operator splitting can be applied to the system $$\Phi \delta x = \overline{r}^k$$.The resulting updates are:
 
-$$\begin{align}\label{eq:admm}
+$$\begin{align}
 \begin{cases}
     \Delta x^{k+1} = \arg\min\limits_{\Delta x}   \mathcal{L}_{\beta}(\Delta x, \Delta w^k, \gamma^k), \\
     \Delta w^{k+1} = \arg\min\limits_{\Delta w}   \mathcal{L}_{\beta}(\Delta x^{k+1}, \Delta w, \gamma^k), \\
@@ -46,7 +48,7 @@ $$\begin{align}\label{eq:admm}
 \end{cases}
 \end{align}$$
 
-The first ADMM update is then solved using a Block PCG. This is equivalent to $$\begin{align}\label{eq:modifiedsystem} \Psi \Delta x^{k+1}=\overline{r}^k +\beta\gamma^k. \end{align} where $\Psi= \Phi+\beta I$.$$
+The first ADMM update is then solved using a Block PCG. This is equivalent to $$\begin{align} \Psi \Delta x^{k+1}=\overline{r}^k +\beta\gamma^k. \end{align}$$ where $\Psi= \Phi+\beta I$.$$
 
 The forward and backward substitutions are used to solve for the subsequent missing variables. 
 
