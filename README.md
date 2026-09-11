@@ -75,7 +75,7 @@ Adding to CMake projects directly:
     include (FetchContent)
     FetchContent_Declare(
         ipm_admm_cg
-        GIT_REPOSITORY https://github.com/
+        GIT_REPOSITORY https://github.com/haritha1248/apip
         GIT_TAG MAIN
     )
     FetchContent_MakeAvailable(ipm_admm_cg)
@@ -88,7 +88,7 @@ Or, add /include/ipm_admm_cg/admm_kkt_solver.hpp directly and ensure Eigen 3.4+ 
 
 #Clone the repository:
 
-    git clone https://github.com/
+    git clone https://github.com/haritha1248/apip
     cd ipm_admm_cg
 
     cmake -B build -DIPM_ADMM_CG_BUILD_EXAMPLES=ON  -DIPM_ADMM_CG_BUILD_TESTS=ON
